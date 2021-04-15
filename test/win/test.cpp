@@ -9,9 +9,11 @@
 
 #include <intrin.h>
 
-static const int cx = 800;
-static const int cy = 600;
+class DisplayContext;
 
+static const int cx = 1280;
+static const int cy = 720;
+static DisplayContext* _display = nullptr;
 /* --------------------------------------------------- */
 
 class SourceContext {
@@ -55,7 +57,15 @@ static LRESULT CALLBACK sceneProc(HWND hwnd, UINT message, WPARAM wParam,
 	case WM_CLOSE:
 		PostQuitMessage(0);
 		break;
-
+	case WM_SIZE:
+	{
+		UINT width = LOWORD(lParam);
+		UINT height = HIWORD(lParam);
+		if (_display) {
+			obs_display_resize(*_display, width, height);
+		}
+	}
+		break;
 	default:
 		return DefWindowProc(hwnd, message, wParam, lParam);
 	}
@@ -71,8 +81,8 @@ static void do_log(int log_level, const char *msg, va_list args, void *param)
 	OutputDebugStringA(bla);
 	OutputDebugStringA("\n");
 
-	if (log_level < LOG_WARNING)
-		__debugbreak();
+	//if (log_level < LOG_WARNING)
+	//	__debugbreak();
 
 	UNUSED_PARAMETER(param);
 }
@@ -118,12 +128,7 @@ static DisplayContext CreateDisplay(HWND hwnd)
 static void AddTestItems(obs_scene_t *scene, obs_source_t *source)
 {
 	obs_sceneitem_t *item = NULL;
-	struct vec2 scale;
-
-	vec2_set(&scale, 20.0f, 20.0f);
-
 	item = obs_scene_add(scene, source);
-	obs_sceneitem_set_scale(item, &scale);
 }
 
 static HWND CreateTestWindow(HINSTANCE instance)
@@ -150,11 +155,25 @@ static HWND CreateTestWindow(HINSTANCE instance)
 
 static void RenderWindow(void *data, uint32_t cx, uint32_t cy)
 {
-	obs_render_main_texture();
+	//obs_render_main_texture();
+	obs_render_main_texture_src_color_only();
 
 	UNUSED_PARAMETER(data);
 	UNUSED_PARAMETER(cx);
 	UNUSED_PARAMETER(cy);
+}
+
+static void AddSource(void *_data, obs_scene_t *scene)
+{
+	SourceContext source = obs_source_create(
+		"random", "some randon source", NULL, nullptr);
+	obs_sceneitem_t *sceneitem = obs_scene_add(scene, source);
+	obs_sceneitem_set_visible(sceneitem, true);
+	struct vec2 scale;
+	vec2_set(&scale, 20.0f, 20.0f);
+	obs_sceneitem_set_scale(sceneitem, &scale);
+	//obs_sceneitem_t* sceneitem = obs_scene_add(scene, source);
+	//obs_sceneitem_set_visible(sceneitem, true);
 }
 
 /* --------------------------------------------------- */
@@ -180,18 +199,20 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR cmdLine,
 
 		/* ------------------------------------------------------ */
 		/* create source */
+		//SourceContext source = obs_source_create(
+		//	"random", "some randon source", NULL, nullptr);
 		SourceContext source = obs_source_create(
-			"random", "some randon source", NULL, nullptr);
+			"monitor_capture", "monitor_capture test", NULL, nullptr);
 		if (!source)
 			throw "Couldn't create random test source";
 
 		/* ------------------------------------------------------ */
 		/* create filter */
-		SourceContext filter = obs_source_create(
-			"test_filter", "a nice green filter", NULL, nullptr);
-		if (!filter)
-			throw "Couldn't create test filter";
-		obs_source_filter_add(source, filter);
+		//SourceContext filter = obs_source_create(
+		//	"test_filter", "a nice green filter", NULL, nullptr);
+		//if (!filter)
+		//	throw "Couldn't create test filter";
+		//obs_source_filter_add(source, filter);
 
 		/* ------------------------------------------------------ */
 		/* create scene and add source to scene (twice) */
@@ -201,6 +222,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR cmdLine,
 
 		AddTestItems(scene, source);
 
+		obs_enter_graphics();
+		obs_scene_atomic_update(scene, AddSource, 0);
+		obs_leave_graphics();
+
 		/* ------------------------------------------------------ */
 		/* set the scene as the primary draw source and go */
 		obs_set_output_source(0, obs_scene_get_source(scene));
@@ -208,6 +233,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR cmdLine,
 		/* ------------------------------------------------------ */
 		/* create display for output and set the output render callback */
 		DisplayContext display = CreateDisplay(hwnd);
+		_display = &display;
 		obs_display_add_draw_callback(display, RenderWindow, nullptr);
 
 		MSG msg;

@@ -266,6 +266,7 @@ if(NOT INSTALLER_RUN)
 	add_subdirectory(libobs)
 	add_subdirectory(plugins)
 	add_subdirectory(UI)
+	add_subdirectory(livetest)
 
 	if (ENABLE_UNIT_TESTS)
 		enable_testing()
